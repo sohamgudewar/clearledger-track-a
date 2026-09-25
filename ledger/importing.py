@@ -12,11 +12,11 @@ def import_csv(db, text, kind):
     if reader.fieldnames != HEADERS[kind]:
         raise ValueError('Expected CSV header: ' + ','.join(HEADERS[kind]))
     customers = {r[0] for r in db.execute('SELECT customer_id FROM customers')}
-    rows = [normalize(row, kind, customers) for row in reader]
     result = {'imported': 0, 'skipped': 0, 'rejected': 0, 'errors': []}
     with db:
-        for line, row in enumerate(rows, 2):
+        for line, raw_row in enumerate(reader, 2):
             try:
+                row = normalize(raw_row, kind, customers)
                 if kind == 'invoices':
                     outcome = insert_invoice(db, row)
                 else:

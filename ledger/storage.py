@@ -59,6 +59,11 @@ def invoice_by_key(db, customer_id, invoice_number):
 
 
 def insert_invoice(db, row):
+    old = invoice_by_key(db, row['customer_id'], row['invoice_number'])
+    if old:
+        if round(old['amount'], 2) == round(row['amount'], 2) and old['due_date'] == row['due_date']:
+            return 'skipped'
+        raise ValueError('Invoice already exists with different details')
     db.execute('''INSERT INTO invoices (customer_id, invoice_number, amount, due_date)
                   VALUES (:customer_id, :invoice_number, :amount, :due_date)''', row)
     return 'imported'
@@ -67,7 +72,9 @@ def insert_invoice(db, row):
 def insert_payment(db, row, invoice_id):
     old = db.execute('SELECT * FROM payments WHERE payment_id=?', (row['payment_id'],)).fetchone()
     if old:
-        if all(old[k] == row[k] for k in ('customer_id', 'invoice_number', 'amount')):
+        if (old['customer_id'] == row['customer_id'] and
+            old['invoice_number'] == row['invoice_number'] and
+            round(old['amount'], 2) == round(row['amount'], 2)):
             return 'skipped'
         raise ValueError('Payment ID already exists with different details')
     db.execute('''INSERT INTO payments (payment_id, customer_id, invoice_number, amount, invoice_id)

@@ -15,13 +15,21 @@ async function refresh() {
   document.querySelector('#invoice-count').textContent = data.summary.invoice_count;
   document.querySelector('#open-count').textContent = data.summary.open_count;
   document.querySelector('#outstanding').textContent = money(data.summary.outstanding);
+  const unmatchedTotalEl = document.querySelector('#unmatched-total');
+  if (unmatchedTotalEl) {
+    unmatchedTotalEl.textContent = `${data.summary.unmatched_count ?? data.unmatched_payments.length} (${money(data.summary.unmatched_total ?? 0)})`;
+  }
   const body = document.querySelector('#invoices');
   body.replaceChildren();
   rows.forEach(r => {
     const row = document.createElement('tr');
     [r.customer_name, r.invoice_number, r.due_date].forEach(v => row.append(text('td', v)));
     [r.amount, r.paid, r.balance].forEach(v => row.append(text('td', money(v), 'number')));
-    row.append(text('td', r.status));
+    const statusCell = text('td', r.status);
+    if (r.is_overdue) {
+      statusCell.append(text('span', ' Overdue', 'badge-overdue'));
+    }
+    row.append(statusCell);
     body.append(row);
   });
   const unmatched = document.querySelector('#unmatched');
@@ -33,14 +41,31 @@ async function refresh() {
 async function submitImport(form) {
   const feedback = form.querySelector('.feedback');
   const button = form.querySelector('button');
+  const input = form.querySelector('input');
   button.disabled = true;
   feedback.textContent = 'Importing…';
   try {
-    const csv = await form.querySelector('input').files[0].text();
-    await fetch(`/api/import?kind=${form.dataset.kind}`, {
+    const file = input.files && input.files[0];
+    if (!file) {
+      feedback.textContent = 'Please choose a CSV file first.';
+      return;
+    }
+    const csv = await file.text();
+    const res = await fetch(`/api/import?kind=${form.dataset.kind}`, {
       method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: csv
     });
-    feedback.textContent = 'Import complete. Your records are ready.';
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      feedback.textContent = `Import failed: ${data.error || res.statusText || 'Unknown error'}`;
+      return;
+    }
+    let msg = `Import complete: ${data.imported} imported, ${data.skipped} skipped, ${data.rejected} rejected.`;
+    if (data.errors && data.errors.length) {
+      const errMsgs = data.errors.map(e => `  • Line ${e.line}: ${e.reason}`).join('\n');
+      msg += `\nErrors:\n${errMsgs}`;
+    }
+    feedback.textContent = msg;
+    input.value = '';
     await refresh();
   } catch (error) {
     feedback.textContent = `Import failed: ${error.message}`;

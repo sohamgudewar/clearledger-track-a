@@ -2,6 +2,9 @@ import csv
 import io
 
 
+from datetime import date
+
+
 def invoices(db, status='all'):
     if status not in ('all', 'open', 'paid'):
         raise ValueError('status must be all, open or paid')
@@ -13,14 +16,17 @@ def invoices(db, status='all'):
         GROUP BY i.id ORDER BY i.id
     ''').fetchall()
     result = []
+    today = date.today().isoformat()
     for row in data:
         item = dict(row)
-        item['balance'] = item['amount'] - item['paid']
-        item['status'] = 'paid' if round(item['balance'], 2) <= 0 else 'open'
+        item['amount'] = round(item['amount'], 2)
+        item['paid'] = round(item['paid'], 2)
+        item['balance'] = round(item['amount'] - item['paid'], 2)
+        item['status'] = 'paid' if item['balance'] <= 0 else 'open'
+        item['is_overdue'] = bool(item['status'] == 'open' and item['due_date'] < today)
         result.append(item)
     if status != 'all':
-        requested = {'open': 'paid', 'paid': 'paid'}[status]
-        result = [r for r in result if r['status'] == requested]
+        result = [r for r in result if r['status'] == status]
     return result
 
 
@@ -28,10 +34,15 @@ def overview(db):
     rows = invoices(db)
     unmatched = [dict(r) for r in db.execute('''SELECT payment_id, customer_id,
         invoice_number, amount FROM payments WHERE invoice_id IS NULL ORDER BY payment_id''')]
+    for p in unmatched:
+        p['amount'] = round(p['amount'], 2)
+    unmatched_total = round(sum(p['amount'] for p in unmatched), 2)
     return {'invoices': rows, 'unmatched_payments': unmatched, 'summary': {
         'invoice_count': len(rows),
         'open_count': sum(r['status'] == 'open' for r in rows),
         'outstanding': round(sum(max(0, r['balance']) for r in rows), 2),
+        'unmatched_count': len(unmatched),
+        'unmatched_total': unmatched_total,
     }}
 
 
@@ -43,6 +54,6 @@ def export_csv(db):
     for row in invoices(db):
         item = {k: row[k] for k in fields}
         for key in ('amount', 'paid', 'balance'):
-            item[key] = f"{int(item[key] * 100) / 100:.2f}"
+            item[key] = f"{round(float(item[key]), 2):.2f}"
         writer.writerow(item)
     return output.getvalue()
