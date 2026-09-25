@@ -31,9 +31,8 @@ I investigated and repaired all six seeded application defects across import, ma
 5. **Cents Precision in Export ([`ledger/reporting.py`](ledger/reporting.py))**: Replaced floating-point truncation (`int(x * 100) / 100`) with rounded two-decimal formatting, preserving exact cents (e.g. `19.99` instead of `19.98`).
 6. **Browser Feedback ([`web/app.js`](web/app.js))**: UI now shows exact counts (`imported`, `skipped`, `rejected`), lists line errors on partial rejection, and displays helpful failure messages on HTTP 400.
 
-**Improvement beyond required repairs**:
-- Added **Unmatched Payments metric** (count and total INR) to the overview stats (`reporting.py`, `index.html`, `app.js`).
-- Added an **Overdue indicator badge** on open invoices whose due date has passed.
+**Single improvement beyond required repairs**:
+- **Unmatched Payments Financial Overview**: Added unallocated payment metrics (`unmatched_count` and `unmatched_total` in INR) to `/api/overview` and a dedicated 4th metric card in the UI dashboard, providing immediate visibility into unresolved customer cash alongside outstanding receivables.
 - Verified via [`tests/test_improvement.py`](tests/test_improvement.py).
 
 ## Evidence and limits
